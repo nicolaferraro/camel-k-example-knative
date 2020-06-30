@@ -61,6 +61,13 @@ then use it to install both **Knative Serving** and **Knative Eventing**.
 
 Refer to the OpenShift Serverless operator documentation for instructions on how to completely install it on your cluster.
 
+### Installing Knative Camel Sources
+
+Knative Camel Sources are an addon for Knative that allows using Camel K integrations as 
+standard Knative sources.
+
+You need to install the **Knative Camel Sources** operator from Operator Hub in your OpenShift installation.
+
 ## Checking requirements
 
 <a href='didact://?commandId=vscode.didact.validateAllRequirements' title='Validate all requirements!'><button>Validate all Requirements at Once!</button></a>
@@ -160,14 +167,21 @@ oc label namespace camel-knative knative-eventing-injection=enabled
 
 ## 3. Push Bitcoin market data to the mesh
 
-We'll create a ([MarketSource.java](didact://?commandId=vscode.open&projectFilePath=MarketSource.java "Opens the file"){.didact}) integration
+We'll create a ([market-source.yaml](didact://?commandId=vscode.open&projectFilePath=market-source.yaml "Opens the file"){.didact}) integration
 with the role of taking live data from the Bitcoin market and pushing it to the event mesh, using the `market.btc.usdt` event type:
 
 
 ```
-kamel run MarketSource.java --logs
+kubectl apply -f market-source.yaml
 ```
-([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kamel%20run%20MarketSource.java%20--logs&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
+([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kubectl%20apply%20-f%20market-source.yaml&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
+
+
+```
+stern market -c integration
+```
+([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$stern%20market%20-c%20integration&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
+
 
 The command above will run the integration and wait for it to run, then it will show the logs in the console.
 
@@ -289,9 +303,9 @@ This includes the two prediction algorithms, the two services that receive event
 To simulate a market close, we will delete the `market-source`:
 
 ```
-kamel delete market-source
+kubectl delete camelsource market-source
 ```
-([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kamel%20delete%20market-source&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
+([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kubectl%20delete%20camelsource%20market-source&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
 
 
 To see the other services going down (it will take **about 2 minutes** for all services to go down), you can repeatedly run the following command:
@@ -307,9 +321,9 @@ At the end of the process, **no user pods will be running**.
 To simulate now a reactivation of the market in the morning, you can create again the `market-source`:
 
 ```
-kamel run MarketSource.java
+kubectl apply -f market-source.yaml
 ```
-([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kamel%20run%20MarketSource.java&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
+([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kubectl%20apply%20-f%20market-source.yaml&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
 
 
 Pods now will start again to run, one after the other, as soon as they are needed:
