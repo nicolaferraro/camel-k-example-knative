@@ -17,8 +17,8 @@ The architecture is composed of the following Camel K integrations:
 - **simple-predictor**: it is triggered by variations in the **BTC/USDT** value and produces "suggested actions", as events for downstream services, telling if it's time to **buy** or **sell** at a specific value.
 - **better-predictor**: it's an alternative prediction algorithm (**prediction algorithms are pluggable** in the architecture) that is wiser and generates less buy/sell events respect to the `simple-predictor`.
 - **silly-investor**: this service believes blindly to the `simple-predictor` and buys/sells Bitcoins whenever the predictor suggests it.
-- **cautious-investor-service**: this is a service built by another team that needs suggestions from the `better-predictor` but it needs to receive them via a pre-existing public REST API that it shared also with external entities.
-- **cautious-investor-adapter-sink**: this Camel K integration listens to buy/sell events from the `better-predictor` and transforms them into REST calls to the `cautious-investor-service` using its public API.
+- **telegram-sink**: this Camel K integration listens to buy/sell events from the `better-predictor` and transforms them into Telegram messages targeting a predefined chat room.
+- **Telegram**: this represents an external service built by another team that needs suggestions from the `better-predictor` but it needs to receive them via some custom API (the Telegram Bot APIs).
 
 All Camel K integrations described above (except the `market-source` which needs to poll the market for new data), are **"serverless"**, meaning that 
 they scale down to zero when they don't receive new events or requests.
@@ -249,47 +249,37 @@ You should be able to see that the investor service is doing actions suggested b
 [**To exit the log view**, just click here](didact://?commandId=vscode.didact.sendNamedTerminalCtrlC&text=camelTerm&completion=Camel%20K%20basic%20integration%20interrupted. "Interrupt the current operation on the terminal"){.didact} 
 or hit `ctrl+c` on the terminal window. The integration will **keep running** on the cluster.
 
-## 6. Connecting an external investor service
+## 6. Connecting an external application (Telegram)
 
-We'll simulate the presence of an existing investor service that is not directly connected to the mesh. It exposes a well defined API
-that is available in the [CautiousInvestorService.java](didact://?commandId=vscode.open&projectFilePath=CautiousInvestorService.java "Opens the investor service definition"){.didact} file.
+We'll simulate the presence of existing investors that are not directly connected to the mesh, but they can be reached via Telegram.
 
-The service could have been developed with any language or framework, but since in this example it's developed with Camel K, it is automatically turned into 
-an autoscaling serverless service.
-
-To run it:
-
-```
-kamel run CautiousInvestorService.java -w
-```
-([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kamel%20run%20CautiousInvestorService.java%20-w&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
+Create a copy of the [telegram.properties.example](didact://?commandId=vscode.open&projectFilePath=telegram.properties.example "Opens the Telegram property file"){.didact} and name it `telegram.properties`. You need to put in that file the **Telegram authorization token** for your Telegram bot. You can use the Telegram bot father to obtain it.
+Other than the authorization token, you also need to set the **unique identifier of the Telegram chat** where you want to publish messages to.
 
 
-The `-w` flag (stands for "wait") in command above will make sure the command terminates on the terminal only when the integration is fully deployed.
-
-Now we can deploy the [CautiousInvestorAdapterSink.java](didact://?commandId=vscode.open&projectFilePath=CautiousInvestorAdapterSink.java "Opens the investor service adapter sink definition"){.didact} integration, that will bring events from the "better" predictor right into the service APIs, after a simple transformation:
+Now we can deploy the [TelegramSink.java](didact://?commandId=vscode.open&projectFilePath=TelegramSink.java "Opens the investor service adapter sink definition"){.didact} integration, that will bring events from the "better" predictor right into the Telegram chat, after a simple transformation:
 
 
 ```
-kamel run CautiousInvestorAdapterSink.java -w
+kamel run TelegramSink.java -w
 ```
-([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kamel%20run%20CautiousInvestorAdapterSink.java%20-w&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
+([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kamel%20run%20TelegramSink.java%20-w&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
 
 
-Once the adapter sink is running, you can look at the external service logs to see if it's receiving recommendations.
+Once the Telegram sink is running, you can look at the external service logs to see if it's receiving recommendations.
 The command for printing the logs is:
 
 ```
-kamel logs cautious-investor-service
+kamel logs telegram-sink
 ```
-([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kamel%20logs%20cautious-investor-service&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
+([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kamel%20logs%20telegram-sink&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
 
 [**To exit the log view**, just click here](didact://?commandId=vscode.didact.sendNamedTerminalCtrlC&text=camelTerm&completion=Camel%20K%20basic%20integration%20interrupted. "Interrupt the current operation on the terminal"){.didact} 
 or hit `ctrl+c` on the terminal window.
 
 You can alternatively follow the logs using the IDE plugin, by right clicking on a running integration on the integrations view.
 
-**HINT**: if the pod does not run or the logs are not showing up, then probably there's nothing to show. Since the "better" predictor is not sensitive to small variations of the Bitcoin value, it's possible that the service will go down after some time to save resources. To force the service to come up again, you can edit the [CautiousInvestorAdapterSink.java](didact://?commandId=vscode.open&projectFilePath=CautiousInvestorAdapterSink.java "Opens the investor service adapter sink definition"){.didact} to change the starting URI from `knative:event/predictor.better` to `knative:event/predictor.simple`, then run again the integration. It's likely that the events generated by the simple predictor will trigger the downstream services more often.
+**HINT**: if the pod does not run or the logs are not showing up, then probably there's nothing to show. Since the "better" predictor is not sensitive to small variations of the Bitcoin value, it's possible that the service will go down after some time to save resources. To force the service to come up again, you can edit the [TelegramSink.java](didact://?commandId=vscode.open&projectFilePath=TelegramSink.java "Opens the investor service adapter sink definition"){.didact} to change the starting URI from `knative:event/predictor.better` to `knative:event/predictor.simple`, then run again the integration. It's likely that the events generated by the simple predictor will trigger the downstream services more often.
 
 
 ## 7. When the market closes...

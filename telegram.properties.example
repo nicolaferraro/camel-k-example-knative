@@ -1,0 +1,5 @@
+# Fill the authorization token from the Telegram "Bot Father"
+camel.component.telegram.authorizationToken=<put-here-your-authorization-token>
+
+# Insert the ID of the Telegram destination chat
+telegram.chat=<put-here-your-chat-id>
