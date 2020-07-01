@@ -7,7 +7,6 @@ public class TelegramSink extends RouteBuilder {
   public void configure() throws Exception {
 
     from("knative:event/predictor.better")
-      .removeHeaders("*")
       .unmarshal().json()
       .transform().simple("Predictor suggests to ${body[operation]} at price ${body[value]}")
       .log("${body}")
