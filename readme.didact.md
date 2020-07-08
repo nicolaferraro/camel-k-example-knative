@@ -14,11 +14,10 @@ It uses **real data** from the bitcoin exchange market, obtained in real time vi
 The architecture is composed of the following Camel K integrations:
 
 - **market-source**: creates a live feed of **BTC/USDT** events, from the Bitcoin exchange market, containing the current value of a bitcoin and related information.
-- **simple-predictor**: it is triggered by variations in the **BTC/USDT** value and produces "suggested actions", as events for downstream services, telling if it's time to **buy** or **sell** at a specific value.
-- **better-predictor**: it's an alternative prediction algorithm (**prediction algorithms are pluggable** in the architecture) that is wiser and generates less buy/sell events respect to the `simple-predictor`.
-- **silly-investor**: this service believes blindly to the `simple-predictor` and buys/sells Bitcoins whenever the predictor suggests it.
-- **telegram-sink**: this Camel K integration listens to buy/sell events from the `better-predictor` and transforms them into Telegram messages targeting a predefined chat room.
-- **Telegram**: this represents an external service built by another team that needs suggestions from the `better-predictor` but it needs to receive them via some custom API (the Telegram Bot APIs).
+- **quarkus-ml**: an existing Quarkus-based machine learning service that we want to leverage.
+- **prediction-bridge**: a Camel K bridge that will transform data to invoke the Quarkus algorithm and publish any suggested action to the broker.
+- **telegram-sink**: this Camel K integration listens to buy/sell events from the `prediction-bridge` and transforms them into Telegram messages targeting a predefined chat room.
+- **Telegram**: this represents an external service built by another team that needs suggestions from the predictor but it needs to receive them via some custom API (the Telegram Bot APIs).
 
 All Camel K integrations described above (except the `market-source` which needs to poll the market for new data), are **"serverless"**, meaning that 
 they scale down to zero when they don't receive new events or requests.
@@ -165,7 +164,21 @@ oc label namespace camel-knative knative-eventing-injection=enabled
 ```
 ([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$oc%20label%20namespace%20camel-knative%20knative-eventing-injection%3Denabled&completion=Created%20Knative%20Broker. "Opens a new terminal and sends the command above"){.didact})
 
-## 3. Push Bitcoin market data to the mesh
+## 2. Publish the Quarkus example ML service
+
+This demo simulates the existence of a Quarkus Machine Learning service with a simple API that accepts numbers and replies 
+occasionally with suggested actions (buy or sell).
+
+We'll create the project using the ([machine-learning/service.yaml](didact://?commandId=vscode.open&projectFilePath=machine-learning/service.yaml "Opens the file"){.didact}) file:
+
+
+```
+kubectl apply -f machine-learning/service.yaml
+```
+([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kubectl%20apply%20-f%20machine-learning/service.yaml&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
+
+
+## 4. Push Bitcoin market data to the mesh
 
 We'll create a ([market-source.yaml](didact://?commandId=vscode.open&projectFilePath=market-source.yaml "Opens the file"){.didact}) integration
 with the role of taking live data from the Bitcoin market and pushing it to the event mesh, using the `market.btc.usdt` event type:
@@ -188,63 +201,16 @@ The command above will run the integration and wait for it to run, then it will 
 [**To exit the log view**, just click here](didact://?commandId=vscode.didact.sendNamedTerminalCtrlC&text=camelTerm&completion=Camel%20K%20basic%20integration%20interrupted. "Interrupt the current operation on the terminal"){.didact} 
 or hit `ctrl+c` on the terminal window. The integration will **keep running** on the cluster.
 
-## 4. Run some prediction algorithms
+## 5. Run the prediction adapter
 
-The market data feed available in the mesh can be now used to create different prediction algorithms that can publish events
-when they believe it's the right time to sell or buy bitcoins, depending on the trend of the exchange.
-
-In this example, we're going to run the *same (basic) [algorithm](didact://?commandId=vscode.open&projectFilePath=algorithms/SimpleAlgorithm.java "Opens the algorithm definition"){.didact} with different parameters*, obtaining two predictors.
-The algorithm is basic and it's just computing if the BTC variation respect to the last observed value is higher than a threshold (expressed in percentage).
-The algorithm is bound to the event mesh via the [Predictor.java](didact://?commandId=vscode.open&projectFilePath=Predictor.java "Opens the predictor definition"){.didact} integration file.
-
-In real life, algorithms can be also much more complicated. For example, Camel K can be used to bridge an external machine learning as-a-service system that 
-will compute much more accurate predictions. Algorithms can also be developed with other ad hoc tools and plugged directly inside the Knative mesh using the Knative APIs.
-
-The first predictor that we're going to run is called `simple-predictor`:
+We're going to run an adapter that will forward the current value of BTC vs USDT to the Quarkus service and publish its reply (if available):
 
 ```
-kamel run --name simple-predictor -p predictor.name=simple Predictor.java algorithms/SimpleAlgorithm.java -t knative-service.max-scale=1 --logs
+kamel run PredictionBridge.java --logs
 ```
-([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kamel%20run%20--name%20simple-predictor%20-p%20predictor.name%3Dsimple%20Predictor.java%20algorithms%2FSimpleAlgorithm.java%20-t%20knative-service.max-scale%3D1%20--logs&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
-
-NOTE: we're setting the maximum number of instances of the autoscaling service to 1 because it runs a basic algorithm that does not support scaling (stores data in memory)
+([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kamel%20run%20PredictionBridge.java%20--logs&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
 
 The command above will deploy the integration and wait for it to run, then it will show the logs in the console.
-
-[**To exit the log view**, just click here](didact://?commandId=vscode.didact.sendNamedTerminalCtrlC&text=camelTerm&completion=Camel%20K%20basic%20integration%20interrupted. "Interrupt the current operation on the terminal"){.didact} 
-or hit `ctrl+c` on the terminal window. The integration will **keep running** on the cluster.
-
-The second one (`better-predictor`) will be just a variation of the first, with a different threshold:
-
-```
-kamel run --name better-predictor -p predictor.name=better -p algorithm.sensitivity=0.0005 Predictor.java algorithms/SimpleAlgorithm.java -t knative-service.max-scale=1
-```
-([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kamel%20run%20--name%20better-predictor%20-p%20predictor.name%3Dbetter%20-p%20algorithm.sensitivity%3D0.0005%20Predictor.java%20algorithms%2FSimpleAlgorithm.java%20-t%20knative-service.max-scale%3D1&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
-
-You can play with the sensitivity of the `better-predictor` to make it do prediction faster or slower and see the effects on the downstream services.
-
-Ensure that both predictors are running:
-
-```
-oc get integrations
-```
-([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$oc%20get%20integrations&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
-
-You should wait also for the `better-predictor` integration to be running before proceeding.
-
-## 5. Run a subscriber investor service
-
-We are going to deploy a service that will listen to the events of type `predictor.simple` (i.e. generated by the simple predictor) and blindly executing the suggested actions (in this example, printing the action to the logs). 
-
-It's thus called `silly-investor`. To run it:
-
-```
-kamel run SillyInvestor.java --logs
-```
-([^ execute](didact://?commandId=vscode.didact.sendNamedTerminalAString&text=camelTerm$$kamel%20run%20SillyInvestor.java%20--logs&completion=Executed%20command. "Opens a new terminal and sends the command above"){.didact})
-
-The command above will run the integration and wait for it to run, then it will show the logs in the console.
-You should be able to see that the investor service is doing actions suggested by the simple predictions.
 
 [**To exit the log view**, just click here](didact://?commandId=vscode.didact.sendNamedTerminalCtrlC&text=camelTerm&completion=Camel%20K%20basic%20integration%20interrupted. "Interrupt the current operation on the terminal"){.didact} 
 or hit `ctrl+c` on the terminal window. The integration will **keep running** on the cluster.
@@ -278,9 +244,6 @@ kamel logs telegram-sink
 or hit `ctrl+c` on the terminal window.
 
 You can alternatively follow the logs using the IDE plugin, by right clicking on a running integration on the integrations view.
-
-**HINT**: if the pod does not run or the logs are not showing up, then probably there's nothing to show. Since the "better" predictor is not sensitive to small variations of the Bitcoin value, it's possible that the service will go down after some time to save resources. To force the service to come up again, you can edit the [TelegramSink.java](didact://?commandId=vscode.open&projectFilePath=TelegramSink.java "Opens the investor service adapter sink definition"){.didact} to change the starting URI from `knative:event/predictor.better` to `knative:event/predictor.simple`, then run again the integration. It's likely that the events generated by the simple predictor will trigger the downstream services more often.
-
 
 ## 7. When the market closes...
 

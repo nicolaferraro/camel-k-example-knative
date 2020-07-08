@@ -1,0 +1,10 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: quarkus-ml
+spec:
+  template:
+    spec:
+      containers:
+        # Build your own and link it here
+        - image: docker.io/nferraro/quarkus-ml

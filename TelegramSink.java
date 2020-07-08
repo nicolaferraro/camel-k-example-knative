@@ -6,11 +6,12 @@ public class TelegramSink extends RouteBuilder {
   @Override
   public void configure() throws Exception {
 
-    from("knative:event/predictor.better")
+    from("knative:event/prediction.quarkus")
       .unmarshal().json()
       .transform().simple("Predictor suggests to ${body[operation]} at price ${body[value]}")
       .log("${body}")
       .to("telegram:bots?chatId={{telegram.chat}}")
+      .removeHeaders("*")
       .setBody().constant("");
 
   }

@@ -25,6 +25,9 @@ spec:
           - log:
               message: "Sending BTC/USDT data to the broker: ${body}"
           - set-header:
+              name: Content-Type
+              constant: application/json
+          - set-header:
               name: CE-Type
               constant: market.btc.usdt
   sink:
