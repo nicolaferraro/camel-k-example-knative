@@ -1,4 +1,4 @@
-// camel-k: language=java
+// camel-k: language=java trait=knative.sink-binding=false
 
 import org.apache.camel.builder.RouteBuilder;
 
@@ -12,19 +12,17 @@ public class PredictionBridge extends RouteBuilder {
         .transform().simple("${body[last]}")
         .log("Latest value for BTC/USDT is: ${body}")
         .marshal().json()
-        .removeHeaders("*")
         .setHeader("Content-Type", constant("application/json"))
-        .to("netty-http:http://quarkus-ml.{{env:NAMESPACE}}.svc.cluster.local/samples")
-        .removeHeaders("*")
-        .wireTap("direct:evaluate")
-        .setBody().constant("");
+        .to("http://quarkus-ml.{{env:NAMESPACE}}.svc.cluster.local/samples?bridgeEndpoint=true")
+        .to("direct:evaluate");
 
       
       from("direct:evaluate")
         .convertBodyTo(String.class)
         .choice()
-          .when(body().isNotEqualTo(""))
+          .when(body().isNotNull())
             .log("Emitting prediction...")
+            .removeHeaders("*")
             .to("knative:event/prediction.quarkus");
 
   }

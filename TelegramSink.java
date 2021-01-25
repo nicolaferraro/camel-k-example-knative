@@ -10,9 +10,7 @@ public class TelegramSink extends RouteBuilder {
       .unmarshal().json()
       .transform().simple("Predictor suggests to ${body[operation]} at price ${body[value]}")
       .log("${body}")
-      .to("telegram:bots?chatId={{telegram.chat}}")
-      .removeHeaders("*")
-      .setBody().constant("");
+      .to("telegram:bots?chatId={{telegram.chat}}");
 
   }
 }
